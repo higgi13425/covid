@@ -1,0 +1,185 @@
+---
+title: "secure_ibd"
+author: "Peter Higgins"
+date: "4/23/2020"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+library(corrplot)
+library(glue)
+library(gt)
+library(gtsummary)
+```
+
+## Secure IBD website
+
+This analysis uses data from a registry, at covidibd.org.
+the current data are found 
+[here](https://www.covidibd.org/current-data/)
+
+Let's web-scrape in the data
+Uh-oh. Turns out it is dynamically generated (probably with javascript). No static scraping for us.
+Might have to upgrade my hardware and use Docker/splashr in the future.
+For now, let's go old-school.
+
+### Pasting with datapasta
+
+```{r datapasta}
+
+url <- "https://www.covidibd.org/current-data/"
+
+# paste without header
+# paste as vector
+
+
+data <- c("Overall\t959\t637\t66%\t320\t33%\t62\t6%\t48\t5%\t37\t4%\t86\t9%", "Age", "0-9 years \t3\t3\t100%\t0\t0%\t0\t0%\t0\t0%\t0\t0%\t0\t0%", "10-19 years \t33\t30\t91%\t3\t9%\t0\t0%\t0\t0%\t0\t0%\t0\t0%", "20-29 years \t181\t147\t81%\t34\t19%\t2\t1%\t1\t1%\t0\t0%\t2\t1%", "30-39 years \t197\t154\t78%\t42\t21%\t7\t4%\t3\t2%\t2\t1%\t7\t4%", "40-49 years \t183\t128\t70%\t55\t30%\t10\t5%\t7\t4%\t2\t1%\t11\t6%", "50-59 years \t151\t91\t60%\t60\t40%\t10\t7%\t9\t6%\t3\t2%\t12\t8%", "60-69 years \t114\t52\t46%\t62\t54%\t23\t20%\t19\t17%\t12\t11%\t28\t25%", "70-79 years \t53\t17\t32%\t36\t68%\t8\t15%\t5\t9%\t6\t11%\t12\t23%", ">=80 years \t40\t12\t30%\t27\t68%\t1\t3%\t4\t10%\t11\t28%\t13\t33%", "Sex", "Male \t502\t313\t62%\t188\t37%\t34\t7%\t26\t5%\t27\t5%\t49\t10%", "Female \t442\t312\t71%\t129\t29%\t28\t6%\t22\t5%\t10\t2%\t37\t8%", "Other \t#N/A\t#N/A\t0%\t#N/A\t0%\t#N/A\t0%\t#N/A\t0%\t#N/A\t0%\t#N/A\t0%", "Disease type", "Crohn\u0092s disease \t547\t387\t71%\t159\t29%\t29\t5%\t24\t4%\t13\t2%\t36\t7%", "Ulcerative Colitis/unspecified\t408\t248\t61%\t160\t39%\t33\t8%\t24\t6%\t24\t6%\t50\t12%", "IBD Disease", "Activity", "Remission\t571\t403\t71%\t167\t29%\t33\t6%\t29\t5%\t21\t4%\t50\t9%", "Mild\t173\t124\t72%\t49\t28%\t6\t3%\t3\t2%\t7\t4%\t9\t5%", "Moderate/Severe\t183\t95\t52%\t87\t48%\t20\t11%\t15\t8%\t7\t4%\t24\t13%", "Unknown\t32\t15\t47%\t17\t53%\t3\t9%\t1\t3%\t2\t6%\t3\t9%", "Smoking", "Current smoker\t44\t20\t45%\t24\t55%\t3\t7%\t1\t2%\t4\t9%\t5\t11%", "Non-smoker\t915\t617\t67%\t296\t32%\t59\t6%\t47\t5%\t33\t4%\t81\t9%", "Comorbidities", "0\t604\t468\t77%\t135\t22%\t16\t3%\t11\t2%\t4\t1%\t19\t3%", "1\t216\t129\t60%\t86\t40%\t21\t10%\t14\t6%\t11\t5%\t26\t12%", "2\t74\t26\t35%\t48\t65%\t10\t14%\t12\t16%\t9\t12%\t17\t23%", "3+\t65\t14\t22%\t51\t78%\t15\t23%\t11\t17%\t13\t20%\t24\t37%", "IBD medication*", "Sulfasalazine/mesalamine\t261\t137\t52%\t124\t48%\t28\t11%\t28\t11%\t21\t8%\t44\t17%", "Budesonide \t27\t14\t52%\t13\t48%\t4\t15%\t3\t11%\t2\t7%\t4\t15%", "Oral/parenteral steroids \t73\t23\t32%\t49\t67%\t14\t19%\t10\t14%\t8\t11%\t18\t25%", "6MP/azathioprine monotherapy\t95\t58\t61%\t37\t39%\t7\t7%\t6\t6%\t2\t2%\t9\t9%", "Methotrexate monotherapy\t6\t3\t50%\t3\t50%\t0\t0%\t0\t0%\t0\t0%\t0\t0%", "Anti-TNF without 6MP/AZA/MTX \t283\t227\t80%\t55\t19%\t7\t2%\t3\t1%\t3\t1%\t8\t3%", "Anti-TNF + 6MP/AZA/MTX \t93\t58\t62%\t35\t38%\t10\t11%\t5\t5%\t2\t2%\t11\t12%", "Anti-integrin \t88\t61\t69%\t27\t31%\t4\t5%\t5\t6%\t2\t2%\t7\t8%", "IL 12/23 inhibitor \t96\t85\t89%\t11\t11%\t2\t2%\t1\t1%\t0\t0%\t2\t2%", "JAK inhibitor \t16\t11\t69%\t5\t31%\t2\t13%\t1\t6%\t1\t6%\t2\t13%", "Other IBD medication \t36\t20\t56%\t16\t44%\t3\t8%\t1\t3%\t1\t3%\t3\t8%")
+
+
+
+
+data2 <- read_tsv(data, skip_empty_rows = TRUE,
+                 col_names = FALSE) %>% 
+  filter(!is.na(X2)) %>% 
+  select(X1:X3, X5, X7, X9, X11, X13) %>% 
+  purrr::set_names(c("characteristic", "total", "outpt", "hosp", "icu", "vent", "death", "icu_vent_death")) 
+
+data3 <- data2 %>%  slice(25:35)
+data3$characteristic[1] <- "Sulfasalazine or mesalamine"
+data3$characteristic[3] <- "Oral or parenteral steroids"
+data3$characteristic[4] <- "6MP or Azathioprine monotherapy"
+data3$characteristic[6] <- "Anti-TNF monotherapy"
+# data3$characteristic[8] <- "Vedolizumab"
+# data3$characteristic[9] <- "Ustekinumab"
+# data3$characteristic[10] <- "Tofacitinib"
+
+chisq <- data3 %>% 
+  mutate(ok = as.integer(total) - as.integer(icu_vent_death),
+         icu_vent_death = as.integer(icu_vent_death)) %>% 
+  select(characteristic, icu_vent_death, ok) %>% 
+  column_to_rownames('characteristic') %>% 
+  chisq.test(correct = TRUE)
+chisq
+
+data4 <- as_tibble(round(chisq$stdres, 3))
+
+exp_icu <- chisq$expected %>% as_tibble() 
+obs_icu <- chisq$observed %>% as_tibble() 
+cbind(data3$characteristic, exp_icu, obs_icu) %>% 
+  purrr::set_names("Medication", "_ICU/Vent/Death", "_OK",
+                   "ICU/Vent/Death", "OK") %>% 
+  gt() %>% 
+  tab_spanner(label = "Expected", 
+              columns = vars("_ICU/Vent/Death", "_OK")) %>%
+  tab_spanner(label = "Observed", 
+              columns = vars("ICU/Vent/Death", "OK")) %>%
+  tab_header(title = "ICU Outcomes of COVID-19 Infection in IBD Patients by Medication", subtitle = "Expected vs. Observed Case Counts") %>% 
+  fmt_number(columns = 2:3, decimals = 2) %>% 
+  cols_align(align = "center") %>% 
+  opt_row_striping(row_striping = TRUE) 
+
+
+chisq_hosp <- data3 %>% 
+  mutate(ok = as.integer(total) - as.integer(hosp),
+         hosp = as.integer(hosp)) %>% 
+  select(characteristic, hosp, ok) %>% 
+  column_to_rownames('characteristic') %>% 
+  chisq.test(correct = TRUE)
+chisq_hosp
+
+data5 <- as_tibble(round(chisq_hosp$stdres, 3))
+
+exp_hosp <- chisq_hosp$expected %>% as_tibble() 
+obs_hosp <- chisq_hosp$observed %>% as_tibble() 
+cbind(data3$characteristic, exp_hosp, obs_hosp) %>% 
+  purrr::set_names("Medication", "_Hospitalized", "_Outpatient",
+                   "Hospitalized", "Outpatient") %>% 
+  gt() %>% 
+  tab_spanner(label = "Expected", 
+              columns = vars("_Hospitalized", "_Outpatient")) %>%
+  tab_spanner(label = "Observed", 
+              columns = vars("Hospitalized", "Outpatient")) %>%
+  tab_header(title = "Hospitalization Outcomes of COVID-19 Infection in IBD Patients by Medication", subtitle = "Expected vs. Observed Case Counts") %>% 
+  fmt_number(columns = 2:3, decimals = 2) %>% 
+  cols_align(align = "center") %>% 
+  opt_row_striping(row_striping = TRUE) 
+
+```
+
+## Including Plots for icu/vent/death
+```{r}
+data4 %>% 
+  cbind(data3$characteristic) %>% 
+  purrr::set_names('icu_vent_death', 'ok', 'medication') %>%   
+  mutate(medication = fct_reorder(medication, icu_vent_death)) %>% 
+  ggplot(aes(x= icu_vent_death,
+             fill = icu_vent_death,
+         y = medication)) +
+  geom_col(color = "black") +
+  labs(x = "Chi square standardized residuals",
+       title = "Association between IBD Medication and COVID-19 Outcomes",
+       caption = glue("Data from covidibd.org on 2020-Apr-27\nOverall Pearson Chi Squared Test with Yates' correction\nX-squared = {round(chisq$statistic[[1]][1], 3)}, df = {chisq$parameter[[1]][1]}, p-value = {round(chisq$p.value[[1]][1], 11)}"),
+       y = "") +
+  annotate("text", x = 2.2, y = 1, size =4,
+           label = "Favors ICU/Ventilator/Death") +
+ annotate("text", x = -1.8, y = 1, size =4,
+           label = "Favors Good Outcome") +
+  theme_linedraw(base_size = 12)+
+  theme(legend.position = "none") +
+  annotate(geom = "segment", x = -3.4, y = 1,
+      xend = -3.9, yend = 1,
+      arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+    annotate(geom = "segment", x = 4.2, y = 1,
+      xend = 4.7, yend = 1,
+      arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  scale_fill_gradient2(low = "green", mid="grey", high="red") +
+  theme(plot.title.position = "plot") +
+  theme(plot.title = element_text(hjust = 0.2, size = 18)) +
+  scale_x_continuous(breaks = seq(-7,7,2))
+
+ggsave("figures/covidibd.png", height = 4, width =9, units = "in", device = "png")
+  
+
+```
+
+## Including Plot for Hospitalization
+
+```{r}
+data5 %>% 
+  cbind(data3$characteristic) %>% 
+  purrr::set_names('hosp', 'ok', 'medication') %>%   
+  mutate(medication = fct_reorder(medication, hosp)) %>% 
+  ggplot(aes(x= hosp,
+             fill = hosp,
+         y = medication)) +
+  geom_col(color = "black") +
+  labs(x = "Chi square standardized residuals",
+       title = "Association between IBD Medication and COVID-19 Hospitalization",
+       caption = glue("Data from covidibd.org on 2020-Apr-27\nOverall Pearson Chi Squared Test with Yates' correction\nX-squared = {round(chisq_hosp$statistic[[1]][1], 3)}, df = {chisq_hosp$parameter[[1]][1]}, p-value = {round(chisq_hosp$p.value[[1]][1], 11)}"),
+       y = "") +
+  annotate("text", x = 2.2, y = 1, size =4,
+           label = "Favors Hospitalization") +
+ annotate("text", x = -2.5, y = 1, size =4,
+           label = "Favors Outpatient Recovery") +
+  theme_linedraw(base_size = 12)+
+  theme(legend.position = "none") +
+  annotate(geom = "segment", x = -4.9, y = 1,
+      xend = -5.4, yend = 1,
+      arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+    annotate(geom = "segment", x = 4.1, y = 1,
+      xend = 4.6, yend = 1,
+      arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  scale_fill_gradient2(low = "green", mid="grey", high="red") +
+  theme(plot.title.position = "plot") +
+  theme(plot.title = element_text(hjust = 0.5, size = 18)) +
+  scale_x_continuous(breaks = seq(-7,7,2))
+
+ggsave("figures/covidibdhosp.png", height = 4, width =9, units = "in", device = "png")
+  
+```
+
